@@ -59,10 +59,6 @@ router.put('/:id', protect, async (req, res, next) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    if (!event.creator.equals(req.user._id)) {
-      return res.status(403).json({ message: 'Only the creator can update this event' });
-    }
-
     const allowedFields = ['title', 'description', 'location', 'category', 'eventDate', 'capacity'];
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -86,10 +82,6 @@ router.delete('/:id', protect, async (req, res, next) => {
 
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
-    }
-
-    if (!event.creator.equals(req.user._id)) {
-      return res.status(403).json({ message: 'Only the creator can delete this event' });
     }
 
     await RSVP.deleteMany({ event: event._id });

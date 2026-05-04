@@ -12,6 +12,14 @@ const emptyEvent = {
   capacity: 50,
 }
 
+function getId(value) {
+  if (!value) {
+    return ''
+  }
+
+  return String(value._id || value.id || value)
+}
+
 function formatDate(value) {
   return new Intl.DateTimeFormat('en', {
     dateStyle: 'medium',
@@ -33,8 +41,8 @@ function App() {
 
   const myRsvps = useMemo(() => {
     return rsvps.reduce((map, rsvp) => {
-      if (rsvp.user?._id === user?.id || rsvp.user?.id === user?.id) {
-        map[rsvp.event?._id || rsvp.event] = rsvp
+      if (getId(rsvp.user) === getId(user)) {
+        map[getId(rsvp.event)] = rsvp
       }
 
       return map
@@ -91,8 +99,8 @@ function App() {
       logRealtime(`Event updated: ${event.title}`)
     })
     socket.on('event:deleted', ({ id }) => {
-      setEvents((items) => items.filter((event) => event._id !== id))
-      setRsvps((items) => items.filter((rsvp) => (rsvp.event?._id || rsvp.event) !== id))
+      setEvents((items) => items.filter((event) => getId(event) !== getId(id)))
+      setRsvps((items) => items.filter((rsvp) => getId(rsvp.event) !== getId(id)))
       logRealtime('An event was deleted')
     })
     socket.on('rsvp:created', (rsvp) => {
@@ -142,11 +150,13 @@ function App() {
       }
 
       if (editingEvent) {
-        await api.put(`/events/${editingEvent}`, payload)
+        const { data } = await api.put(`/events/${editingEvent}`, payload)
+        setEvents((items) => items.map((item) => (getId(item) === getId(data) ? data : item)))
         setEditingEvent(null)
         setMessage('Event updated')
       } else {
-        await api.post('/events', payload)
+        const { data } = await api.post('/events', payload)
+        setEvents((items) => [data, ...items.filter((item) => getId(item) !== getId(data))])
         setMessage('Event created')
       }
 
@@ -169,7 +179,22 @@ function App() {
   }
 
   async function deleteEvent(id) {
-    await api.delete(`/events/${id}`)
+    setMessage('')
+
+    try {
+      await api.delete(`/events/${id}`)
+      setEvents((items) => items.filter((event) => getId(event) !== getId(id)))
+      setRsvps((items) => items.filter((rsvp) => getId(rsvp.event) !== getId(id)))
+
+      if (getId(editingEvent) === getId(id)) {
+        setEditingEvent(null)
+        setEventForm(emptyEvent)
+      }
+
+      setMessage('Event deleted')
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Event delete failed')
+    }
   }
 
   async function createOrUpdateRsvp(eventId, status) {
@@ -276,7 +301,6 @@ function App() {
 
         <div className="cards">
           {events.map((event) => {
-            const owner = event.creator?._id === user?.id || event.creator?.id === user?.id
             const myRsvp = myRsvps[event._id]
 
             return (
@@ -324,7 +348,7 @@ function App() {
                   </div>
                 )}
 
-                {owner && (
+                {user && (
                   <div className="actions">
                     <button type="button" className="secondary" onClick={() => startEdit(event)}>
                       Edit
